@@ -5,6 +5,7 @@ from winding import build_winding, build_layer, build_coil
 from validation import validate
 from kicad_export import EmitConfig, emit_kicad
 from visualisation.viewer import generate_visualisations
+from kicad_output import save_kicad_file
 
 def main():
 
@@ -139,10 +140,15 @@ def main():
         },
     )
 
-    lines = emit_kicad(
-        wdg,
-        cfg,
-    )
+    lines = emit_kicad(wdg, cfg)
+
+    save_kicad_file(
+          lines,
+          filename="pcb_stator_winding",
+      )
+
+    print("\n[6] KiCad emit (coils + buried vias):")
+    print(f"  emitted elements : {len(lines)}")
 
     print("\n[6] KiCad emit (coils + buried vias):")
 
