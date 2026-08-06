@@ -1,65 +1,61 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    import matplotlib.pyplot as plt
 
 OUTPUT_DIR = Path("output") / "visualisations"
+IMAGE_EXTENSIONS = {".png", ".svg", ".pdf"}
 
 
-def prepare_output_directory():
+def prepare_output_directory() -> Path:
+    """Prepare visualisation output directory.
+
+    Removes previous generated figures so that outdated images cannot remain
+    after design changes.
     """
-    Prepare visualisation output directory.
-
-    Removes previous generated figures so that
-    outdated images cannot remain after design changes.
-    """
-
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     for file in OUTPUT_DIR.iterdir():
+        if file.is_file() and file.suffix.lower() in IMAGE_EXTENSIONS:
+            file.unlink()
 
-        if file.is_file():
+    return OUTPUT_DIR
 
-            if file.suffix.lower() in {
-                ".png",
-                ".svg",
-                ".pdf",
-            }:
-                file.unlink()
 
 def save_figure(
-    fig,
+    fig: plt.Figure,
     filename: str,
-):
+    formats: tuple[str, ...] = ("png",),
+) -> dict[str, Path]:
+    """Save matplotlib figure in publication formats.
+
+    Parameters
+    ----------
+    fig:
+        The Matplotlib figure instance to save.
+    filename:
+        Target base name without extension.
+    formats:
+        File extensions to render (default is ("png",); can include "svg", "pdf").
     """
-    Save matplotlib figure in publication formats.
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    Outputs:
-        PNG  - quick viewing
-        can do SVG and PDF if needed
-    """
-
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    paths = {
-        "png": OUTPUT_DIR / f"{filename}.png",
-        "svg": OUTPUT_DIR / f"{filename}.svg",
-        "pdf": OUTPUT_DIR / f"{filename}.pdf",
-    }
-
-    fig.savefig(
-        paths["png"],
-        dpi=600,
-        bbox_inches="tight",
-    )
-
+    saved_paths = {}
     print("\nSaved visualisation:")
-    
-    for path in paths.values():
+
+    for fmt in formats:
+        ext = fmt.lstrip(".")
+        path = OUTPUT_DIR / f"{filename}.{ext}"
+        
+        fig.savefig(
+            path,
+            dpi=600 if ext == "png" else None,
+            bbox_inches="tight",
+        )
+        saved_paths[ext] = path
         print(f"  {path}")
+
+    return saved_paths

@@ -1,241 +1,112 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 
 import matplotlib.pyplot as plt
 
 from spec import WindingSpec
 from winding import build_winding
 
-from .colours import phase_colour, layer_colour
+from .colours import layer_colour, phase_colour
 from .drawing import draw_segment, draw_via
 from .overlays import (
     draw_board_outline,
-    draw_keepout,
     draw_centre_marker,
     draw_coil_label,
+    draw_keepout,
     draw_star_point,
 )
 
-def clear_visualisation_folder():
-    """
-    Remove old PNG visualisations.
 
-    Prevents stale images remaining when:
-    - layer count changes
-    - coil parameters change
-    - filenames change
-    """
-
+def clear_visualisation_folder() -> None:
+    """Remove old PNG visualisations to prevent stale images remaining."""
     folder = Path("output") / "visualisations"
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True, exist_ok=True)
 
-    if not folder.exists():
-        return
 
-    for file in folder.glob("*.png"):
-        file.unlink()
-
-def save_figure(
-    fig,
-    filename: str,
-):
-    """
-    Save figure as high-resolution PNG.
-    """
-
+def save_figure(fig: plt.Figure, filename: str) -> Path:
+    """Save figure as a high-resolution PNG."""
     folder = Path("output") / "visualisations"
-
-    folder.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    folder.mkdir(parents=True, exist_ok=True)
 
     path = folder / f"{filename}.png"
-
-    fig.savefig(
-        path,
-        dpi=600,
-        bbox_inches="tight",
-    )
-
+    fig.savefig(path, dpi=600, bbox_inches="tight")
     print(f"Saved: {path}")
+    return path
+
 
 def draw_winding(
-    ax,
+    ax: plt.Axes,
     wdg,
     show_layers: bool = False,
     selected_layer: str | None = None,
-):
-    """
-    Draw winding copper.
-
-    Parameters
-    ----------
-    show_layers:
-        False -> phase colours
-        True  -> PCB layer colours
-
-    selected_layer:
-        If supplied, only draw that copper layer.
-    """
-
-    xs = []
-    ys = []
+) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """Draw winding copper and return coordinate bounds (x_range, y_range)."""
+    min_x = min_y = float("inf")
+    max_x = max_y = float("-inf")
+    has_points = False
 
     for coil in wdg.coils:
-
         for a, b, layer in coil.segments:
+            if selected_layer is not None and layer != selected_layer:
+                continue
 
-            if selected_layer is not None:
+            colour = layer_colour(layer) if show_layers else phase_colour(coil.phase)
+            draw_segment(ax, a, b, colour=colour, linewidth=0.8)
 
-                if layer != selected_layer:
-                    continue
+            min_x, max_x = min(min_x, a[0], b[0]), max(max_x, a[0], b[0])
+            min_y, max_y = min(min_y, a[1], b[1]), max(max_y, a[1], b[1])
+            has_points = True
 
-
-            if show_layers:
-
-                colour = layer_colour(layer)
-
-            else:
-
-                colour = phase_colour(
-                    coil.phase
-                )
-
-
-            draw_segment(
-                ax,
-                a,
-                b,
-                colour=colour,
-                linewidth=0.8,
-            )
-
-
-            xs.extend(
-                [
-                    a[0],
-                    b[0],
-                ]
-            )
-
-            ys.extend(
-                [
-                    a[1],
-                    b[1],
-                ]
-            )
         # Only display vias on complete views
-
         if selected_layer is None:
-
             for xy, _, _ in coil.vias:
+                draw_via(ax, xy, colour="purple")
+                min_x, max_x = min(min_x, xy[0]), max(max_x, xy[0])
+                min_y, max_y = min(min_y, xy[1]), max(max_y, xy[1])
+                has_points = True
 
-                draw_via(
-                    ax,
-                    xy,
-                    colour="purple",
-                )
-
-                xs.append(
-                    xy[0]
-                )
-
-                ys.append(
-                    xy[1]
-                )
+    return ((min_x, max_x), (min_y, max_y)) if has_points else None
 
 
-    return xs, ys
-
-def label_coils(
-    ax,
-    wdg,
-):
-
+def label_coils(ax: plt.Axes, wdg) -> None:
+    """Draw coil labels at lead positions."""
     for coil in wdg.coils:
-
-        draw_coil_label(
-            ax,
-            coil.lead,
-            f"C{coil.slot:02d}\n{coil.phase}",
-        )
+        draw_coil_label(ax, coil.lead, f"C{coil.slot:02d}\n{coil.phase}")
 
 
+def setup_plot(ax: plt.Axes, spec: WindingSpec, title: str) -> None:
+    """Add mechanical references and styling."""
+    draw_board_outline(ax, spec.keepout_radius_mm)
+    draw_keepout(ax, spec.keepout_radius_mm)
+    draw_centre_marker(ax)
 
-def setup_plot(
-    ax,
-    spec,
-    title,
-):
-    """
-    Add mechanical references.
-    """
+    ax.set_aspect("equal")
+    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    ax.set_xlabel("X (mm)")
+    ax.set_ylabel("Y (mm)")
+    ax.set_title(title)
 
-    draw_board_outline(
-        ax,
-        spec.keepout_radius_mm,
-    )
-
-    draw_keepout(
-        ax,
-        spec.keepout_radius_mm,
-    )
-
-    draw_centre_marker(
-        ax,
-    )
-
-
-    ax.set_aspect(
-        "equal"
-    )
-
-    ax.grid(
-        True,
-        linestyle="--",
-        linewidth=0.5,
-        alpha=0.4,
-    )
-
-
-    ax.set_xlabel(
-        "X (mm)"
-    )
-
-    ax.set_ylabel(
-        "Y (mm)"
-    )
-
-    ax.set_title(
-        title
-    )
 
 def render_view(
-    spec,
+    spec: WindingSpec,
     wdg,
-    filename,
-    title,
-    show_layers=False,
-    selected_layer=None,
-    labels=False,
-):
-    fig, ax = plt.subplots(
-        figsize=(8, 8),
-    )
+    filename: str,
+    title: str,
+    show_layers: bool = False,
+    selected_layer: str | None = None,
+    labels: bool = False,
+) -> None:
+    """Render a single figure view and save it to disk."""
+    fig, ax = plt.subplots(figsize=(8, 8))
 
-    setup_plot(
-        ax,
-        spec,
-        title,
-    )
+    setup_plot(ax, spec, title)
+    draw_star_point(ax, wdg.star)
 
-    draw_star_point(
-        ax,
-        wdg.star,
-    )
-
-    xs, ys = draw_winding(
+    bounds = draw_winding(
         ax,
         wdg,
         show_layers=show_layers,
@@ -243,49 +114,27 @@ def render_view(
     )
 
     if labels:
+        label_coils(ax, wdg)
 
-        label_coils(
-            ax,
-            wdg,
-        )
-
-    if xs and ys:
-
+    if bounds:
+        (min_x, max_x), (min_y, max_y) = bounds
         margin = 3.0
-
-        ax.set_xlim(
-            min(xs)-margin,
-            max(xs)+margin,
-        )
-
-        ax.set_ylim(
-            min(ys)-margin,
-            max(ys)+margin,
-        )
+        ax.set_xlim(min_x - margin, max_x + margin)
+        ax.set_ylim(min_y - margin, max_y + margin)
 
     plt.tight_layout()
-
-
-    save_figure(
-        fig,
-        filename,
-    )
-
+    save_figure(fig, filename)
     plt.close(fig)
 
-def generate_visualisations(
-    spec: WindingSpec | None = None,
-):
-    if spec is None:
 
-        spec = WindingSpec()
-
+def generate_visualisations(spec: WindingSpec | None = None) -> None:
+    """Generate all standard stator winding visualisations."""
+    spec = spec or WindingSpec()
     clear_visualisation_folder()
 
-    wdg = build_winding(
-        spec
-    )
+    wdg = build_winding(spec)
 
+    # Overview plots
     render_view(
         spec,
         wdg,
@@ -294,7 +143,6 @@ def generate_visualisations(
         show_layers=False,
         labels=True,
     )
-
     render_view(
         spec,
         wdg,
@@ -303,24 +151,11 @@ def generate_visualisations(
         show_layers=True,
     )
 
-    layers = sorted(
-        {
-            layer
-            for coil in wdg.coils
-            for _, _, layer in coil.segments
-        }
-    )
+    # Individual layer plots
+    layers = sorted({layer for coil in wdg.coils for _, _, layer in coil.segments})
 
     for layer in layers:
-
-        filename = (
-            "layer_"
-            + layer.replace(
-                ".",
-                "_",
-            )
-        )
-
+        filename = f"layer_{layer.replace('.', '_')}"
         render_view(
             spec,
             wdg,
@@ -330,6 +165,6 @@ def generate_visualisations(
             selected_layer=layer,
         )
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     generate_visualisations()

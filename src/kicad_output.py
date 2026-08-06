@@ -1,53 +1,25 @@
 from pathlib import Path
 
+
 def save_kicad_file(
-    lines,
-    filename="pcb_stator_winding",
-):
-    """
-    Save generated KiCad geometry.
+    lines: list[str],
+    filename: str = "pcb_stator_winding",
+) -> Path:
+    """Save generated KiCad geometry.
 
     Output:
         output/kicad/<filename>.kicad_pcb
     """
+    output_dir = Path("output") / "kicad"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    folder = Path("output") / "kicad"
+    path = output_dir / f"{filename}.kicad_pcb"
 
-    folder.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    header = "(kicad_pcb\n  (version 20240108)\n  (generator pcbnew)\n\n"
+    body = "".join(f"  {line}\n" for line in lines)
+    footer = ")\n"
 
-    path = folder / f"{filename}.kicad_pcb"
+    path.write_text(header + body + footer, encoding="utf-8")
 
-    with open(path, "w") as f:
-
-        f.write(
-            "(kicad_pcb\n"
-            "  (version 20240108)\n"
-            "  (generator pcbnew)\n\n"
-        )
-
-        # write generated segments/vias
-
-        for line in lines:
-
-            f.write(
-                "  "
-                + line
-                + "\n"
-            )
-
-        f.write(
-            ")\n"
-        )
-
-    print(
-        "\nSaved KiCad PCB:"
-    )
-
-    print(
-        f"  {path}"
-    )
-
+    print(f"\nSaved KiCad PCB:\n  {path}")
     return path

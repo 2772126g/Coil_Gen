@@ -29,7 +29,7 @@ def emit_kicad(wdg: Winding, cfg: EmitConfig) -> List[str]:
     placed at cfg.centre and netted per cfg.phase_nets.
 
     By default only the physical coils + buried vias are emitted. The series
-    links and star spokes are NOT emitted as copper by default because, drawn
+    links and star spokes are not emitted as copper by default because, drawn
     directly, they cross coil copper; they should be bus-routed during board
     integration (use connection_map() for the wiring order). Set
     include_links=True to emit them as-is anyway (e.g. for a quick preview).
